@@ -1,0 +1,28 @@
+# --- Basic plugins ---
+pyaudio
+numpy
+webrtcvad-wheels
+customtkinter
+packaging
+
+# --- Nvidia plugins for using Canary ---
+sacrebleu
+setuptools
+fsspec==2024.12.0
+nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git
+hf_xet
+
+# --- PyTorch (30 series GPU tested - cu124) ---
+# Note: If upgrading the GPU, uninstall these first before installing the updated versions.
+--extra-index-url https://download.pytorch.org/whl/cu124
+torch
+torchvision
+torchaudio
+
+# --- PyTorch (50 series GPU specific - nightly cu128) ---
+# To use this instead, comment out the 30-series section above, uncomment the lines below,
+# and run your pip install command with the --pre flag: pip install --pre -r requirements.txt
+# --extra-index-url https://download.pytorch.org/whl/nightly/cu128
+# torch
+# torchvision
+# torchaudio

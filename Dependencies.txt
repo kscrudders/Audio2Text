@@ -1,0 +1,32 @@
+	--- Basic Python install ---
+	
+install python 3.12.10 - https://www.python.org/downloads/release/python-31210/
+in the cmd window:
+python --version
+python -m pip install --upgrade pip
+	
+	--- Local envirnment setup ---
+setup virual envirnment
+cd C:\Users\...\Audio2Text
+python -m venv C:\Users\...\Audio2Text
+C:\Users\...\Audio2Text\Scripts\activate
+
+	--- Basic plugins ---
+pip install pyaudio numpy webrtcvad-wheels
+pip install customtkinter packaging
+
+	--- Nvidia plugins for using Canary ---
+pip install sacrebleu
+pip install --upgrade setuptools
+pip install fsspec==2024.12.0
+pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git"
+pip install hf_xet`
+
+% 50 series GPU (specific), 20260109
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+
+% 30 series GPU tested (nightly cu128 crashs the model load)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+
+% If you upgrade your GPU, uninstall then install the updated versions from above:
+pip uninstall -y torch torchvision torchaudio
