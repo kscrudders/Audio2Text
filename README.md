@@ -24,8 +24,9 @@ Audio2Text provides a convenient graphical interface to interact with Nvidia's c
 
 This application is particularly useful to anyone who wants precise transcription capabilities that outperform the default tools in Word or Google Documents, functioning seamlessly on consumer-grade to high-end Nvidia GPUs.
 
-<div align="center"> <img src="./images/Demo.gif" width="100%" height="50%"/> <div align="left">
-
+<div align="center">
+  <img src="./images/demo.gif" width="600" alt="Termpicker Demo"><br>
+</div>
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p> <!-- BUILT WITH -->
 
