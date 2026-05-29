@@ -1,5 +1,25 @@
 import os
 import sys
+from pathlib import Path
+
+# --- VENV BOOTSTRAP ---
+def _ensure_venv():
+    # 1. Define the path to your venv's pythonw.exe
+    # This assumes your venv is a folder named '.venv' in the same directory as the script
+    script_dir = Path(__file__).resolve().parent
+    venv_python = script_dir / "Scripts" / "pythonw.exe"
+
+    # 2. Check if we are already running in that venv
+    # If the venv exists and we aren't using its interpreter, re-launch ourselves
+    if venv_python.exists() and sys.executable.lower() != str(venv_python).lower():
+        import os
+        # os.execl replaces the current process with the venv process
+        os.execl(str(venv_python), str(venv_python), *sys.argv)
+
+# Run the bootstrap before anything else (like AI imports) starts
+_ensure_venv()
+# ----------------------
+
 import wave
 import time
 import threading
@@ -13,7 +33,6 @@ import collections
 import tkinter as tk
 import tkinter.filedialog as filedialog
 import customtkinter as ctk
-from pathlib import Path
 from typing import Optional, List, Union, Tuple
 from dataclasses import dataclass
 import re
@@ -35,7 +54,7 @@ except Exception as e:
 # --- CONFIGURATION ---
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
-os.environ["PYTORCH_ALLOC_CONF"] = "expandable_segments:True"  # handling for large audio files
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # handling for large audio files
 
 # --- CONSTANTS ---
 SAMPLE_RATE = 44100
@@ -53,7 +72,7 @@ OVERLAP_MS = 2000            # ~2.0s audio overlap on each side of 60s chunks
 # Generation / chunking
 MAX_TOKENS = 512  # 256 is often too small for >~60s of speech;
 CHUNK_MS_CANARY = 60 * 1000      # 60s for Canary
-CHUNK_MS_PARAKEET = 4 * 60 * 1000 # 5 mins for Parakeet
+CHUNK_MS_PARAKEET = 60 * 1000 # 25s for Parakeet
 
 
 def app_dir() -> Path:
@@ -310,7 +329,7 @@ class ModelSelectionScreen(ctk.CTkToplevel):
                 main_frame,
                 "⚡ Faster Inference",
                 "nvidia/parakeet-tdt-0.6b-v3",
-                "Smaller model, faster processing\n*WIP random crashing bug*",
+                "Smaller model, faster processing\nRequires 6-8 GB VRAM",
                 "parakeet"
             )
             
@@ -580,8 +599,8 @@ class VoiceRecorder(ctk.CTk):
         self.transcribing = False
         if NEMO_AVAILABLE and torch.cuda.is_available():
             self.model = None
-            gc.collect()
             torch.cuda.empty_cache()
+            gc.collect()
         self.destroy()
 
     def center_window(self) -> None:
@@ -772,7 +791,21 @@ class VoiceRecorder(ctk.CTk):
             self.model = model_class.from_pretrained(model_path)
             self.model = self.model.to(self.device)
             self.model.eval()
-
+            if not is_salm:
+                try:
+                    from omegaconf import open_dict
+                    decoding_cfg = self.model.cfg.decoding
+                    with open_dict(decoding_cfg):
+                        decoding_cfg.strategy = "greedy_batch"
+                        decoding_cfg.greedy.use_cuda_graph_decoder = False
+                    self.model.change_decoding_strategy(decoding_cfg)
+                except Exception as e:
+                    # Fallback: direct disable (path varies by NeMo version)
+                    try:
+                        self.model.decoding.decoding.decoding_computer.disable_cuda_graphs()
+                    except Exception:
+                        self.update_text_area(f"Note: could not disable CUDA graphs: {e}")
+            
             self.set_status(f"Ready ({d_name})", "#2CC985")
             self.update_text_area(f"Loaded: {model_path}\nReady to record.", clear=True)
             
@@ -824,7 +857,7 @@ class VoiceRecorder(ctk.CTk):
             except TypeError as e:
                 try:
                     with torch.no_grad():
-                        output = self.model.transcribe(audio=[wav_path])
+                        output = self.model.transcribe(audio=[wav_path], num_workers=0)
                         if output and len(output) > 0:
                             hypothesis = output[0]
                             if hasattr(hypothesis, 'text'):
@@ -903,7 +936,7 @@ class VoiceRecorder(ctk.CTk):
 
             temp_files: List[Path] = []
             stitcher = OverlapStitcher(window=120, min_match=5)
-
+            
             try:
                 self.set_status("Loading Audio...", "orange")
 
@@ -975,11 +1008,6 @@ class VoiceRecorder(ctk.CTk):
                     stitcher.add(text_part, chunk_score=score)
 
                     self.update_text_area(f"--- Chunk {i+1}/{total_chunks} ---\n{text_part}\n")
-
-                    # VRAM cleanup
-                    if self.use_amp and torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-                    gc.collect()
 
                 final_text = stitcher.text()
                 self.update_text_area(final_text, clear=True)
@@ -1225,7 +1253,8 @@ class VoiceRecorder(ctk.CTk):
 
             with wave.open(str(filename), "wb") as wf:
                 wf.setnchannels(1)
-                wf.setsampwidth(pyaudio.PyAudio().get_sample_size(pyaudio.paInt16))
+                # wf.setsampwidth(pyaudio.PyAudio().get_sample_size(pyaudio.paInt16))
+                wf.setsampwidth(2)
                 wf.setframerate(SAMPLE_RATE)
                 wf.writeframes(normalized)
 
