@@ -20,41 +20,117 @@ def _ensure_venv():
 _ensure_venv()
 # ----------------------
 
-import wave
+# ----------------------------------------------------------------------------
+# FAST STARTUP
+# ----------------------------------------------------------------------------
+# The heavy AI libraries (torch + NeMo) can take 10-30s to import on a cold
+# start. If they are imported up front, the window cannot appear until that wait
+# is over -- so it looks like nothing is happening. Instead we:
+#   1) paint a tiny splash NOW using only the standard library (appears instantly),
+#   2) do the quick imports and build the main window,
+#   3) import torch/NeMo in a BACKGROUND thread while the window is already up,
+#      showing a live "Loading AI engine..." indicator.
+# ----------------------------------------------------------------------------
 import time
 import threading
-import pyaudio
+import tkinter as tk
+
+os.environ.setdefault("PYTORCH_CUDA_ALLOC_CONF", "expandable_segments:True")  # set before torch import
+
+
+def _build_splash() -> tk.Tk:
+    """A borderless 'Starting up...' card painted with stdlib tkinter only."""
+    s = tk.Tk()
+    s.overrideredirect(True)
+    w, h = 380, 170
+    x = (s.winfo_screenwidth() - w) // 2
+    y = (s.winfo_screenheight() - h) // 2
+    s.geometry(f"{w}x{h}+{x}+{y}")
+    s.configure(bg="#1E1E1E")
+    try:
+        s.attributes("-topmost", True)
+    except Exception:
+        pass
+    frame = tk.Frame(s, bg="#1E1E1E", highlightbackground="#3B8ED0", highlightthickness=2)
+    frame.pack(fill="both", expand=True)
+    tk.Label(frame, text="Audio2Text", bg="#1E1E1E", fg="#3B8ED0",
+             font=("Arial", 24, "bold")).pack(pady=(36, 6))
+    tk.Label(frame, text="Starting up\u2026", bg="#1E1E1E", fg="#DCE4EE",
+             font=("Arial", 13)).pack()
+    tk.Label(frame, text="First launch can take a little while.", bg="#1E1E1E",
+             fg="gray", font=("Arial", 9)).pack(pady=(10, 0))
+    s.update_idletasks()
+    s.lift()
+    s.update()  # force an immediate paint before the slow imports below
+    return s
+
+
+_SPLASH = _build_splash()
+
+# --- Quick imports (a second or two): GUI toolkit, audio I/O, math ---
+import wave
 import audioop
-import numpy as np
-import webrtcvad
 import contextlib
 import queue
 import collections
-import tkinter as tk
+import re
+import math
+import numpy as np
+import pyaudio
+import webrtcvad
 import tkinter.filedialog as filedialog
 import customtkinter as ctk
 from typing import Optional, List, Union, Tuple
 from dataclasses import dataclass
-import re
-import math
 from pydub import AudioSegment
 
-# --- AI IMPORTS ---
+# --- Heavy AI backend: imported lazily in a background thread (see _load_backend) ---
+torch = None
+gc = None
+SALM = None
+ASRModel = None
+NEMO_AVAILABLE = False
 NEMO_ERROR = None
-try:
-    import torch
-    import gc
-    from nemo.collections.speechlm2.models import SALM
-    from nemo.collections.asr.models import ASRModel
-    NEMO_AVAILABLE = True
-except Exception as e:
-    NEMO_AVAILABLE = False
-    NEMO_ERROR = str(e)
+BACKEND_READY = threading.Event()
+
+
+def _load_backend() -> None:
+    """Import torch + NeMo off the main thread so the GUI stays responsive."""
+    global torch, gc, SALM, ASRModel, NEMO_AVAILABLE, NEMO_ERROR
+
+    # Some libraries try to install signal handlers at import time, which raises
+    # in a non-main thread. We are a GUI app (no console), so swallow those.
+    import signal
+    _orig_signal = signal.signal
+
+    def _safe_signal(sig, handler):
+        try:
+            return _orig_signal(sig, handler)
+        except (ValueError, OSError):
+            return None
+
+    signal.signal = _safe_signal
+    try:
+        import torch as _torch
+        import gc as _gc
+        from nemo.collections.speechlm2.models import SALM as _SALM
+        from nemo.collections.asr.models import ASRModel as _ASRModel
+        torch = _torch
+        gc = _gc
+        SALM = _SALM
+        ASRModel = _ASRModel
+        NEMO_AVAILABLE = True
+    except Exception as e:
+        NEMO_AVAILABLE = False
+        NEMO_ERROR = str(e)
+    finally:
+        signal.signal = _orig_signal
+        BACKEND_READY.set()
+
 
 # --- CONFIGURATION ---
 ctk.set_appearance_mode("Dark")
 ctk.set_default_color_theme("blue")
-os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"  # handling for large audio files
 
 # --- CONSTANTS ---
 SAMPLE_RATE = 44100
@@ -553,12 +629,47 @@ class VoiceRecorder(ctk.CTk):
         self.center_window()
         self.cleanup_old_recordings(keep_last=5)
 
-        if NEMO_AVAILABLE:
-            self.update_text_area("Checking system capabilities...")
-            # Show model selection screen after a brief delay
-            self.after(500, self.show_model_selection)
-        else:
-            self.update_text_area(f"⚠️ NeMo Error:\n{NEMO_ERROR}")
+        # The AI engine (torch + NeMo) is still importing in the background.
+        # Show a clearly-alive "loading" state and proceed once it's ready.
+        self._loading_start = time.time()
+        self.set_status("Loading AI engine\u2026", "orange")
+        self.update_text_area(
+            "Starting up \u2014 loading the AI engine.\n"
+            "The first launch can take a little while.",
+            clear=True
+        )
+        self.progress_frame.grid()
+        self.progress_bar.start()
+        self.processing_timer_label.configure(text="Loading AI engine\u2026 0.0s")
+        threading.Thread(target=_load_backend, daemon=True).start()
+        self.after(150, self._await_backend)
+
+    def _await_backend(self) -> None:
+        """Poll until torch/NeMo finish importing, then start model selection."""
+        if not self.winfo_exists():
+            return
+        elapsed = time.time() - self._loading_start
+        try:
+            self.processing_timer_label.configure(text=f"Loading AI engine\u2026 {elapsed:.1f}s")
+        except Exception:
+            pass
+
+        if BACKEND_READY.is_set():
+            try:
+                self.progress_bar.stop()
+                self.progress_frame.grid_remove()
+                self.processing_timer_label.configure(text="Processing: 0.0s")  # reset for batch reuse
+            except Exception:
+                pass
+            if NEMO_AVAILABLE:
+                self.update_text_area("Checking system capabilities...", clear=True)
+                self.show_model_selection()
+            else:
+                self.set_status("AI engine failed to load", "red")
+                self.update_text_area(f"\u26a0\ufe0f NeMo Error:\n{NEMO_ERROR}", clear=True)
+            return
+
+        self.after(150, self._await_backend)
 
     def show_model_selection(self):
         """Show model selection screen based on VRAM availability"""
@@ -597,10 +708,11 @@ class VoiceRecorder(ctk.CTk):
         self.app_running = False
         self.recording = False
         self.transcribing = False
-        if NEMO_AVAILABLE and torch.cuda.is_available():
+        if NEMO_AVAILABLE and torch is not None and torch.cuda.is_available():
             self.model = None
             torch.cuda.empty_cache()
-            gc.collect()
+            if gc is not None:
+                gc.collect()
         self.destroy()
 
     def center_window(self) -> None:
@@ -946,10 +1058,10 @@ class VoiceRecorder(ctk.CTk):
                 duration_ms = len(audio)
 
                 # --- SAFETY CHECK (Issue 1) ---
-                if not self.is_salm and duration_ms < 5000:
-                    self.update_text_area("⚠️ Audio too short for Parakeet.\nPlease record at least 5 seconds.", clear=True)
-                    self.set_status("Audio too short", "orange")
-                    return
+                #if not self.is_salm and duration_ms < 5000:
+                #    self.update_text_area("⚠️ Audio too short for Parakeet.\nPlease record at least 5 seconds.", clear=True)
+                #    self.set_status("Audio too short", "orange")
+                #    return
                 # ------------------------
 
                 # Dynamic Chunk Length Selection
@@ -1197,7 +1309,8 @@ class VoiceRecorder(ctk.CTk):
                 # ============================================================
                 if not self.is_salm:  # Only for Parakeet
                     # Lock if < 5s OR within the 5s window after a 5 min (300s) chunk
-                    should_lock = (passed % (CHUNK_MS_PARAKEET/1000)) < 5
+                    #should_lock = (passed % (CHUNK_MS_PARAKEET/1000)) < 5
+                    should_lock = False; # Having a minimum lenght is no longer needed.
 
                     if should_lock != button_locked:
                         button_locked = should_lock
@@ -1294,5 +1407,11 @@ class VoiceRecorder(ctk.CTk):
 
 
 if __name__ == "__main__":
+    # The main window is built without the heavy AI libraries, so it appears
+    # quickly; tear down the splash just before it shows.
+    try:
+        _SPLASH.destroy()
+    except Exception:
+        pass
     app = VoiceRecorder()
     app.mainloop()
