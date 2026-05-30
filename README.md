@@ -42,10 +42,10 @@ Follow these instructions to run Audio2Text on your local machine.
 
 Prerequisites: </p>
 Dependencies are indicated in the Dependencies.txt file:
-- Only tested on Nvidia GPUs (tested using 3070, 3090, 5070 ti)
+- Only tested on Nvidia GPUs (tested using 3070, 3090, 5070 ti, and 5090)
     - Canary Model: Requires 12+ GB VRAM (e.g., RTX 3090 24GB, RTX 5070 Ti 16GB).
     - Parakeet Model: Works on GPUs with <12 GB VRAM (e.g., RTX 3070 8GB)
-- Python 3.12
+- Python 3.12.10
 - Various python packages indicated in the Dependencies.txt
 
 Installation: </p>
