@@ -1,0 +1,154 @@
+# Getting Started (Windows, from scratch)
+
+## Built With
+
+- **Python 3.12** (tested on 3.12.10)
+- **PyTorch** (CUDA build, matched to your GPU)
+- **NVIDIA NeMo** (`nemo_toolkit` — provides access to the Canary and Parakeet models)
+- **customtkinter** (GUI)
+- **FFmpeg** (decodes non-WAV audio files such as MP3/M4A/FLAC/OGG)
+
+<sub>[(back to top)](#getting-started-windows-from-scratch)</sub>
+
+## Prerequisites
+
+- **Windows 10 or 11.**
+- **An NVIDIA GPU.** Only NVIDIA cards have been tested (3070, 3090, 5070 Ti, 5090).
+  - **Canary** (higher accuracy): needs **12+ GB VRAM** (e.g. RTX 3090 24 GB, RTX 5070 Ti 16 GB).
+  - **Parakeet** (faster): works on **< 12 GB VRAM** (e.g. RTX 3070 8 GB).
+- **Disk space + internet for the models.** The models are downloaded automatically from Hugging Face the first time you select one (Parakeet ≈ 1–2 GB, Canary ≈ several GB) and cached under `%USERPROFILE%\.cache\huggingface`. The first launch with a given model is slow; later launches are fast.
+- A current **NVIDIA GPU driver** (update from the NVIDIA app / GeForce Experience if unsure).
+
+<sub>[(back to top)](#getting-started-windows-from-scratch)</sub>
+
+## Installation
+
+### Step 1 — Install Python 3.12
+
+1. Download Python **3.12.10** from <https://www.python.org/downloads/release/python-31210/> (scroll down to **Windows installer (64-bit)**).
+2. Run the installer. On the first screen, **check the box "Add python.exe to PATH"** before clicking *Install Now*. This is required — it also sets up the file association that lets you double-click the app later.
+3. Open a **new** Command Prompt (`cmd.exe`) and confirm it worked:
+   ```bat
+   python --version
+   python -m pip install --upgrade pip
+   ```
+   You should see `Python 3.12.10`.
+
+> Stick with 3.12. Newer Python versions (3.13+) don't have matching PyTorch/NeMo wheels here.
+
+### Step 2 — Install Git
+
+You need Git both to clone the repo and to install NeMo (pip pulls NeMo straight from GitHub).
+
+- Download and install **Git for Windows** from <https://git-scm.com/download/win> (the defaults are fine).
+- *Alternative:* if you'd rather not install Git, you can download the repo as a ZIP from the green **Code → Download ZIP** button on GitHub and extract it — but Git is still needed for the NeMo install in Step 5.
+
+### Step 3 — Get the code
+
+```sh
+git clone https://github.com/kscrudders/Audio2Text.git
+```
+
+Note where it lands — you'll reuse this path. These instructions assume:
+
+```
+C:\Users\<you>\Audio2Text
+```
+
+### Step 4 — Create the virtual environment *inside the project folder*
+
+> **Important:** Create the environment **in the project root itself**, not in a separate `.venv` folder. Audio2Text auto-detects and re-launches itself using `Scripts\pythonw.exe` located next to the main script. If the environment lives anywhere else, that auto-relaunch won't find it and the app won't start.
+
+```bat
+cd C:\Users\<you>\Audio2Text
+python -m venv .
+```
+
+This adds `Scripts\`, `Lib\`, and `pyvenv.cfg` alongside the source files. Now activate it (you only need to do this for the install steps below):
+
+```bat
+C:\Users\<you>\Audio2Text\Scripts\activate
+```
+
+Your prompt should now be prefixed with the environment name. (Use **Command Prompt**, not PowerShell — PowerShell's execution policy often blocks the activate script.
+
+### Step 5 — Install the Python packages
+
+With the environment activated:
+
+```bat
+python -m pip install --upgrade pip setuptools
+
+:: --- GUI + audio ---
+pip install pyaudio numpy webrtcvad-wheels
+pip install customtkinter packaging
+
+:: --- NeMo and its dependencies (needs Git from Step 2) ---
+pip install sacrebleu
+pip install fsspec==2024.12.0
+pip install "nemo_toolkit[asr] @ git+https://github.com/NVIDIA/NeMo.git"
+pip install hf_xet
+```
+
+### Step 6 — Install PyTorch for your GPU (do this LAST)
+
+Install PyTorch **after** NeMo, so it overrides the generic build NeMo pulls in. **Pick exactly one** command for your GPU generation — the CUDA build must match your card, or the model can crash while loading.
+
+**RTX 50-series (Blackwell):** PyTorch nightly, CUDA 12.8
+```bat
+pip install --pre torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu128
+```
+
+**RTX 30 / 40-series:** PyTorch stable, CUDA 12.4
+```bat
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu124
+```
+> On 30-series cards the nightly cu128 build has been observed to crash on model load — use the stable cu124 build above.
+
+Verify CUDA is visible:
+```bat
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"
+```
+The second value should be `True`.
+
+### Step 7 — Add FFmpeg
+
+FFmpeg is required to load compressed audio (MP3, M4A, FLAC, OGG). Recording to WAV works without it, but the **Load Audio** button needs it for non-WAV files.
+
+1. Go to <https://www.gyan.dev/ffmpeg/builds/> and download **`ffmpeg-git-full.7z`**. (You'll need [7-Zip](https://www.7-zip.org/) to extract a `.7z` archive.) The official source page is also at <https://www.ffmpeg.org/download.html#build-windows>.
+2. Inside the extracted folder, open `bin\`. Copy **`ffmpeg.exe`** **and** **`ffprobe.exe`** into the application directory — the same folder as the main script:
+   ```
+   C:\Users\<you>\Audio2Text\ffmpeg.exe
+   C:\Users\<you>\Audio2Text\ffprobe.exe
+   ```
+   The app looks for `ffmpeg.exe` there (and uses `ffprobe.exe` if present).
+
+### Step 8 — Run it
+
+You do **not** need to activate the environment to run the app — the script relaunches itself using the environment you created in Step 4.
+
+- **Double-click** the main script (`Audio2Text.pyw`) in `C:\Users\<you>\Audio2Text`.
+- Or from an activated Command Prompt: `python Audio2Text.pyw`
+
+A small splash appears immediately, then the main window opens showing **"Loading AI engine…"** while PyTorch/NeMo load in the background. When that finishes you'll be asked to pick a model. The first time you choose a model it downloads from Hugging Face, so give it a few minutes.
+
+<sub>[(back to top)](#getting-started-windows-from-scratch)</sub>
+
+## Changing GPUs later
+
+If you swap to a different GPU generation, uninstall PyTorch and reinstall the correct build from Step 6:
+
+```bat
+pip uninstall -y torch torchvision torchaudio
+```
+Then run the install command that matches the new card.
+
+## Troubleshooting
+
+- **`'python' is not recognized`** — Python wasn't added to PATH. Re-run the installer and tick "Add python.exe to PATH", or open a fresh terminal after installing.
+- **`torch.cuda.is_available()` is `False`** — the wrong PyTorch build for your GPU, or an outdated driver. Update your NVIDIA driver and reinstall the matching build from Step 6.
+- **NeMo install fails** — make sure Git (Step 2) is installed; the NeMo line clones from GitHub.
+- **App starts but can't open MP3/M4A files** — `ffmpeg.exe` (and `ffprobe.exe`) aren't in the application directory (Step 7).
+- **Double-clicking opens the code in an editor instead of running it** — the `.pyw` association is missing; reinstall Python with "Add to PATH", or right-click the file → *Open with* → Python.
+
+<sub>[(back to top)](#getting-started-windows-from-scratch)</sub>
