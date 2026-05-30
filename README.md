@@ -110,7 +110,8 @@ Project Link: https://github.com/kscrudders/Audio2Text
 <p align="right">(<a href="#readme-top">back to top</a>)</p> <!-- ACKNOWLEDGMENTS -->
 
 Acknowledgments
-* Most code was written by Gemini 3 Pro. Variables and settings were tuned by KLS and research on audio normalization and chunking was done by KLS. 
+* Most code was written by Gemini 3 Pro. Variables and settings were tuned by KLS and research on audio normalization and chunking was done by KLS.
+* Recent 2026 debugging and 'live' refactor by Claude Opus 4.6-4.8. Tested and approvaed by KLS.
 * All code was approved and tested by Kevin.
 
 <p align="right">(<a href="#readme-top">back to top</a>)</p>
