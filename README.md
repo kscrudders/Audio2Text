@@ -81,7 +81,7 @@ Usage: </p>
 - [x] Dynamic chunking and alignment-aware stitching
 - [x] CustomTkinter graphical interface
 - [x] Fix hard crashing with the Parakeet model implementation (source of error unknown)
-- [ ] Improve the stiching between audio chunks. Still quite a few repeating words.
+- [ ] Improve the stiching between audio chunks. Sometimes silence induces excess word repeating.
 
 See the [open issues](https://github.com/kscrudders/Audio2Text/issues) for a full list of proposed features (and known issues).
 
