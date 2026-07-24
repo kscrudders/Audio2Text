@@ -19,13 +19,13 @@ _ensure_venv()
 # ----------------------------------------------------------------------------
 # FAST STARTUP
 # ----------------------------------------------------------------------------
-# The heavy AI libraries (torch + NeMo) can take 10-30s to import on a cold
+# The heavy ML libraries (torch + NeMo) can take 10-30s to import on a cold
 # start. If they are imported up front, the window cannot appear until that wait
 # is over -- so it looks like nothing is happening. Instead we:
 #   1) paint a tiny splash NOW using only the standard library (appears instantly),
 #   2) do the quick imports and build the main window,
 #   3) import torch/NeMo in a BACKGROUND thread while the window is already up,
-#      showing a live "Loading AI engine..." indicator.
+#      showing a live "Loading ML engine..." indicator.
 # ----------------------------------------------------------------------------
 import time
 import threading
@@ -74,7 +74,7 @@ import customtkinter as ctk
 from typing import Optional, List, Union, Tuple   # NOTE: capital-U "Union"
 from dataclasses import dataclass
 from pydub import AudioSegment
-# --- Heavy AI backend: imported lazily in a background thread (see _load_backend) ---
+# --- Heavy ML backend: imported lazily in a background thread (see _load_backend) ---
 torch = None
 gc = None
 SALM = None
@@ -609,12 +609,12 @@ class VoiceRecorder(ctk.CTk):
         self.use_amp = False
         self.center_window()
         self.cleanup_old_recordings(keep_last=5)
-        # The AI engine (torch + NeMo) is still importing in the background.
+        # The ML engine (torch + NeMo) is still importing in the background.
         # Show a clearly-alive "loading" state and proceed once it's ready.
         self._loading_start = time.time()
-        self.set_status("Loading AI engine\u2026", "orange")
+        self.set_status("Loading ML engine\u2026", "orange")
         self.update_text_area(
-            "Starting up \u2014 loading the AI engine.\n"
+            "Starting up \u2014 loading the ML engine.\n"
             "The first launch can take a little while.",
             clear=True
         )
@@ -643,7 +643,7 @@ class VoiceRecorder(ctk.CTk):
                 self.update_text_area("Checking system capabilities...", clear=True)
                 self.show_model_selection()
             else:
-                self.set_status("AI engine failed to load", "red")
+                self.set_status("ML engine failed to load", "red")
                 self.update_text_area(f"\u26a0\ufe0f NeMo Error:\n{NEMO_ERROR}", clear=True)
             return
         self.after(150, self._await_backend)
