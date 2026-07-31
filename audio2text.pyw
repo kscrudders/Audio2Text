@@ -13,7 +13,7 @@ def _ensure_venv():
         import os
         # os.execl replaces the current process with the venv process
         os.execl(str(venv_python), str(venv_python), *sys.argv)
-# Run the bootstrap before anything else (like AI imports) starts
+# Run the bootstrap before anything else (like ML imports) starts
 _ensure_venv()
 # ----------------------
 # ----------------------------------------------------------------------------
@@ -366,7 +366,7 @@ class ModelSelectionScreen(ctk.CTkToplevel):
         # Title
         title = ctk.CTkLabel(
             main_frame,
-            text="Choose AI Model",
+            text="Choose ML Model",
             font=("Arial", 24, "bold")
         )
         title.pack(pady=(0, 10))
@@ -620,7 +620,7 @@ class VoiceRecorder(ctk.CTk):
         )
         self.progress_frame.grid()
         self.progress_bar.start()
-        self.processing_timer_label.configure(text="Loading AI engine\u2026 0.0s")
+        self.processing_timer_label.configure(text="Loading ML engine\u2026 0.0s")
         threading.Thread(target=_load_backend, daemon=True).start()
         self.after(150, self._await_backend)
     def _await_backend(self) -> None:
@@ -629,7 +629,7 @@ class VoiceRecorder(ctk.CTk):
             return
         elapsed = time.time() - self._loading_start
         try:
-            self.processing_timer_label.configure(text=f"Loading AI engine\u2026 {elapsed:.1f}s")
+            self.processing_timer_label.configure(text=f"Loading ML engine\u2026 {elapsed:.1f}s")
         except Exception:
             pass
         if BACKEND_READY.is_set():
@@ -1616,7 +1616,7 @@ class VoiceRecorder(ctk.CTk):
             )
         self.run_transcription(files)
 if __name__ == "__main__":
-    # The main window is built without the heavy AI libraries, so it appears
+    # The main window is built without the heavy ML libraries, so it appears
     # quickly; tear down the splash just before it shows.
     try:
         _SPLASH.destroy()
